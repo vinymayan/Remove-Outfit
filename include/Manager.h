@@ -39,7 +39,7 @@ public:
     }
 
     // Valor padrão inicial
-    OutfitConversionMode outfitMode = OutfitConversionMode::kOnlyEmpty;
+    OutfitConversionMode outfitMode = OutfitConversionMode::kFullConversion;
     bool removeSleepOutfit = false;
     bool autoEquip = true;
     bool markAsOwned = false;

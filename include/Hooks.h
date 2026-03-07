@@ -19,9 +19,19 @@ private:
     static bool Hook_ShouldBackgroundClone(const RE::TESObjectREFR* a_this) {
         auto actor = const_cast<RE::Actor*>(a_this->As<RE::Actor>());
         if (actor && !actor->IsDead() && actor != RE::PlayerCharacter::GetSingleton()) {
-            auto settings = NPCSettings::GetSingleton();
-            if (settings->autoEquip) {
-                EquipBestInventoryItems(actor);
+            static std::unordered_map<RE::FormID, std::chrono::steady_clock::time_point> lastUpdateMap;
+            auto now = std::chrono::steady_clock::now();
+            auto actorID = actor->GetFormID();
+
+            // Verifica se já passaram 200ms desde a última execução para este NPC
+            if (lastUpdateMap.find(actorID) == lastUpdateMap.end() ||
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateMap[actorID]).count() >= 200) {
+
+                auto settings = NPCSettings::GetSingleton();
+                if (settings->autoEquip) {
+                    EquipBestInventoryItems(actor);
+                    lastUpdateMap[actorID] = now; // Atualiza o timestamp
+                }
             }
         }
 
