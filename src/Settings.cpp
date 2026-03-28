@@ -1,4 +1,4 @@
-#include "Settings.h"
+Ôªø#include "Settings.h"
 
 namespace RDO_UI {
 
@@ -13,14 +13,14 @@ namespace RDO_UI {
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
-        // --- AVISO DE RECOMENDA«√O ---
+        // --- AVISO DE RECOMENDA√á√ÉO ---
         ImGuiMCP::PushStyleColor(ImGuiMCP::ImGuiCol_Text, { 1.0f, 0.8f, 0.4f, 1.0f });
         ImGuiMCP::TextWrapped("Recommendation: Use 'Remove Outfits' for mid-save games and if you use EDF/SPID. \nUse 'Full Conversion' for new games, or if want the NPC to have the default outfit items");
         ImGuiMCP::TextWrapped("NOTE: Changing modes (except from Disabled) requires a game restart.");
         ImGuiMCP::PopStyleColor();
         ImGuiMCP::Spacing();
 
-        // --- MODO DE CONVERS√O ---
+        // --- MODO DE CONVERS√ÉO ---
         const char* modes[] = {
             "Disabled (Do nothing)",
             "Remove Outfits (Safe)",
@@ -34,7 +34,7 @@ namespace RDO_UI {
             for (int i = 0; i < 3; i++) {
                 if (ImGuiMCP::Selectable(modes[i], currentMode == i)) {
                     if (currentMode != i) {
-                        // LÛgica: Se sair de qualquer modo que N√O seja Disable (0), mostra o popup
+                        // L√≥gica: Se sair de qualquer modo que N√ÉO seja Disable (0), mostra o popup
                         if (currentMode != static_cast<int>(OutfitConversionMode::kDisabled)) {
                             showRestartPopup = true;
                         }
@@ -58,7 +58,7 @@ namespace RDO_UI {
             );
         }
 
-        // --- OUTRAS OP«’ES ---
+        // --- OUTRAS OP√á√ïES ---
         ImGuiMCP::Spacing();
         if (ImGuiMCP::Checkbox("Enable Auto Equip", &settings->autoEquip)) {
             settings->Save();
@@ -81,8 +81,14 @@ namespace RDO_UI {
         if (ImGuiMCP::IsItemHovered()) {
             ImGuiMCP::SetTooltip("Also removes default sleep outfits used when NPCs go to sleep.");
         }
+        if (ImGuiMCP::Checkbox("Only Affect Recruitable NPCs", &settings->onlyRecruitable)) {
+            settings->Save();
+        }
+        if (ImGuiMCP::IsItemHovered()) {
+            ImGuiMCP::SetTooltip("If enabled, outfit removal and auto-equip will ONLY apply to potential or current followers.");
+        }
 
-        // --- AVISOS DIN¬MICOS ---
+        // --- AVISOS DIN√ÇMICOS ---
         if (settings->outfitMode == OutfitConversionMode::kDisabled) {
             ImGuiMCP::Spacing();
             ImGuiMCP::TextColored({ 1.0f, 0.4f, 0.4f, 1.0f }, "Status: Plugin is currently idling (Disabled).");
@@ -92,7 +98,7 @@ namespace RDO_UI {
             ImGuiMCP::TextColored({ 0.4f, 1.0f, 0.4f, 1.0f }, "Status: Outfit conversion is ACTIVE.");
         }
 
-        // --- L”GICA DO POPUP DE REINICIALIZA«√O ---
+        // --- L√ìGICA DO POPUP DE REINICIALIZA√á√ÉO ---
         if (showRestartPopup) {
             ImGuiMCP::OpenPopup("Restart Required");
         }

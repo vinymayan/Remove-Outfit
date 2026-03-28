@@ -1,6 +1,22 @@
-#include "Manager.h"
-
+Ôªø#include "Manager.h"
+#include <thread>
+#include <chrono>
+#include <mutex>
+#include <unordered_set>
 void EquipBestInventoryItems(RE::Actor* a_actor);
+
+inline bool IsRecruitable(RE::Actor* a_actor) {
+    if (!a_actor) return false;
+
+    auto potentialFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0005C84D);
+    auto currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0001CA7D);
+
+    bool isPotential = potentialFollowerFaction && a_actor->IsInFaction(potentialFollowerFaction);
+    bool isCurrent = currentFollowerFaction && a_actor->IsInFaction(currentFollowerFaction);
+    bool isTeammate = a_actor->IsPlayerTeammate();
+
+    return isPotential || isCurrent || isTeammate;
+}
 
 class BackgroundCloneHook {
 public:
@@ -8,29 +24,59 @@ public:
         // Localiza a VTable principal de TESObjectREFR
         REL::Relocation<std::uintptr_t> vtable{ RE::Character::VTABLE[0] };
 
-        // Realiza o hook no Ìndice 0x6D conforme definido no header
+        // Realiza o hook no √≠ndice 0x6D conforme definido no header
         _ShouldBackgroundClone = vtable.write_vfunc(0x6D, &Hook_ShouldBackgroundClone);
 
-        SKSE::log::info("Hook de ShouldBackgroundClone instalado no Ìndice 0x6D");
+        SKSE::log::info("Hook de ShouldBackgroundClone instalado no √≠ndice 0x6D");
     }
 
 private:
-    // Nota: Como a funÁ„o original È 'const', o ponteiro 'this' tambÈm deve ser const
     static bool Hook_ShouldBackgroundClone(const RE::TESObjectREFR* a_this) {
         auto actor = const_cast<RE::Actor*>(a_this->As<RE::Actor>());
-        if (actor && !actor->IsDead() && actor != RE::PlayerCharacter::GetSingleton()) {
-            static std::unordered_map<RE::FormID, std::chrono::steady_clock::time_point> lastUpdateMap;
-            auto now = std::chrono::steady_clock::now();
-            auto actorID = actor->GetFormID();
 
-            // Verifica se j· passaram 200ms desde a ˙ltima execuÁ„o para este NPC
-            if (lastUpdateMap.find(actorID) == lastUpdateMap.end() ||
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdateMap[actorID]).count() >= 200) {
+        if (actor && actor != RE::PlayerCharacter::GetSingleton()) {
+            auto settings = NPCSettings::GetSingleton();
 
-                auto settings = NPCSettings::GetSingleton();
-                if (settings->autoEquip) {
-                    EquipBestInventoryItems(actor);
-                    lastUpdateMap[actorID] = now; // Atualiza o timestamp
+            bool shouldProcess = true;
+            if (settings->onlyRecruitable && !IsRecruitable(actor)) {
+                shouldProcess = false;
+            }
+
+            if (settings->autoEquip) {
+                // Estruturas est√°ticas para controlar quem j√° tem uma equipagem agendada
+                static std::unordered_set<RE::FormID> scheduledActors;
+                static std::mutex scheduledMutex;
+
+                auto actorID = actor->GetFormID();
+
+                std::lock_guard<std::mutex> lock(scheduledMutex);
+
+                // Se o ator n√£o estiver na lista de agendamentos, n√≥s o agendamos
+                if (scheduledActors.find(actorID) == scheduledActors.end()) {
+                    scheduledActors.insert(actorID);
+
+                    // Abre uma thread separada apenas para a contagem do tempo (n√£o trava o jogo)
+                    std::thread([actorID]() {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+
+                        // Ap√≥s 200ms, agenda a tarefa na thread principal usando a interface do SKSE
+                        SKSE::GetTaskInterface()->AddTask([actorID]() {
+
+                            // Libera o ator da lista de agendamento para permitir execu√ß√µes futuras
+                            {
+                                std::lock_guard<std::mutex> lock(scheduledMutex);
+                                scheduledActors.erase(actorID);
+                            }
+
+                            // Busca o ator com seguran√ßa pelo ID. 
+                            // O ponteiro original poderia ser inv√°lido ap√≥s 200ms.
+                            auto currentActor = RE::TESForm::LookupByID<RE::Actor>(actorID);
+                            if (currentActor && !currentActor->IsDead()) {
+                                EquipBestInventoryItems(currentActor);
+                            }
+                            });
+
+                        }).detach(); // Separa a thread para rodar de forma independente
                 }
             }
         }

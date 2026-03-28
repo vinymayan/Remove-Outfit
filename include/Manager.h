@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 
 #include <string>
 #include <vector>
@@ -27,7 +27,7 @@ struct InternalFormInfo {
 enum class OutfitConversionMode : int {
     kDisabled = 0,
     kOnlyEmpty = 1,     // Ligado (Apenas remove)
-    kFullConversion = 2 // Ligado (Converte para invent·rio e adiciona)
+    kFullConversion = 2 // Ligado (Converte para invent√°rio e adiciona)
     
 };
 
@@ -38,15 +38,16 @@ public:
         return &singleton;
     }
 
-    // Valor padr„o inicial
+    // Valor padr√£o inicial
     OutfitConversionMode outfitMode = OutfitConversionMode::kFullConversion;
     bool removeSleepOutfit = false;
     bool autoEquip = true;
     bool markAsOwned = false;
+    bool onlyRecruitable = false;
 
     void Load() {
         if (!std::filesystem::exists(settingsPath)) {
-            Save(); // Cria o padr„o se n„o existir
+            Save(); // Cria o padr√£o se n√£o existir
             return;
         }
 
