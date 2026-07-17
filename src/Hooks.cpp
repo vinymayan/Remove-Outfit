@@ -1,4 +1,4 @@
-﻿#include "Hooks.h"
+#include "Hooks.h"
 #include <mutex>
 #include <set>
 #include <map>
@@ -11,7 +11,7 @@ struct BestSlotInfo {
     RE::FormID formID = 0;
 };
 
-// --- SISTEMA DE CONTROLE DE CONCORRÊNCIA ---
+// --- SISTEMA DE CONTROLE DE CONCORRENCIA ---
 static std::mutex g_equipBestMutex;
 static std::set<RE::FormID> g_actorsInEquipBest;
 
@@ -29,7 +29,7 @@ bool IsBetter(RE::TESObjectARMO* a_candidate, const BestSlotInfo& a_current) {
     return candidateID > a_current.formID;
 }
 
-// NOVA FUNÇÃO: Verifica se a armadura serve na raça do ator
+// NOVA FUNCAO: Verifica se a armadura serve na raca do ator
 bool IsValidForActor(RE::TESObjectARMO* a_armor, RE::Actor* a_actor) {
     if (!a_armor || !a_actor) return false;
 
@@ -40,10 +40,10 @@ bool IsValidForActor(RE::TESObjectARMO* a_armor, RE::Actor* a_actor) {
     for (RE::TESObjectARMA* arma : a_armor->armorAddons) {
         if (!arma) continue;
 
-        // Verifica a raça principal do Addon
+        // Verifica a raca principal do Addon
         if (arma->race == race) return true;
 
-        // Verifica as raças adicionais suportadas pelo Addon
+        // Verifica as racas adicionais suportadas pelo Addon
         for (RE::TESRace* addRace : arma->additionalRaces) {
             if (addRace == race) return true;
         }
@@ -77,89 +77,70 @@ void EquipBestInventoryItems(RE::Actor* a_actor)
 
 
 
-    auto inventory = a_actor->GetInventory();
+    auto inventory = a_actor->GetInventory([a_actor](RE::TESBoundObject& object) {
+        auto armor = object.As<RE::TESObjectARMO>();
+        return armor && !armor->IsShield() && IsValidForActor(armor, a_actor);
+    });
+
     std::map<uint32_t, BestSlotInfo> currentSlotStats;
+    std::map<uint32_t, std::pair<RE::TESBoundObject*, RE::InventoryEntryData*>> bestSlotItems;
     bool modelUpdated = false;
 
-    // 1. MAPEAMENTO E CORREÇÃO DE SLOTS ATUAIS
+    // 1. MAPEIA OS ITENS EQUIPAVEIS QUE JA ESTAO EM USO
     for (auto& [item, invData] : inventory) {
-        if (invData.second && invData.second->IsWorn() && item->IsArmor()) {
-            auto armor = item->As<RE::TESObjectARMO>();
-
-            // Se for criança e a armadura atual não servir (ex: Ebony Armor), desequipa imediatamente
-            if (!IsValidForActor(armor, a_actor)) {
-                equipManager->UnequipObject(a_actor, item, nullptr, 1, nullptr, false, false, false);
-                modelUpdated = true;
-                continue;
-            }
-
-            uint32_t mask = static_cast<uint32_t>(*armor->GetSlotMask());
-            for (uint32_t i = 0; i < 32; ++i) {
-                uint32_t slotBit = 1 << i;
-                if (mask & slotBit) {
-                    BestSlotInfo info{ armor->GetArmorRating(), armor->value, armor->GetFormID() };
-                    if (info.rating > currentSlotStats[slotBit].rating) {
-                        currentSlotStats[slotBit] = info;
-                    }
-                }
-            }
+        auto entry = invData.second.get();
+        auto armor = item ? item->As<RE::TESObjectARMO>() : nullptr;
+        if (!entry || !entry->IsWorn() || !armor) {
+            continue;
         }
-    }
 
-    // 2. COLETA E ORDENAÇÃO
-    using InventoryPair = std::pair<RE::TESBoundObject*, RE::InventoryEntryData*>;
-    std::vector<InventoryPair> itemsToProcess;
-
-    for (auto& [item, invData] : inventory) {
-        if (invData.first > 0 && item->IsArmor()) {
-            auto armor = item->As<RE::TESObjectARMO>();
-            if (armor && !armor->IsShield()) {
-
-                if (!IsValidForActor(armor, a_actor)) {
-                    continue;
-                }
-
-                itemsToProcess.push_back({ item, invData.second.get() });
-            }
-        }
-    }
-
-    std::sort(itemsToProcess.begin(), itemsToProcess.end(), [](const InventoryPair& a, const InventoryPair& b) {
-        auto armoA = a.first->As<RE::TESObjectARMO>();
-        auto armoB = b.first->As<RE::TESObjectARMO>();
-        if (armoA->GetArmorRating() != armoB->GetArmorRating()) return armoA->GetArmorRating() > armoB->GetArmorRating();
-        if (armoA->value != armoB->value) return armoA->value > armoB->value;
-        return armoA->GetFormID() > armoB->GetFormID();
-        });
-
-    // 3. EQUIPAGEM SELETIVA
-    for (auto& [item, entry] : itemsToProcess) {
-        auto armor = item->As<RE::TESObjectARMO>();
         uint32_t mask = static_cast<uint32_t>(*armor->GetSlotMask());
-
-        bool isBetterForAnySlot = false;
         for (uint32_t i = 0; i < 32; ++i) {
             uint32_t slotBit = 1 << i;
             if (mask & slotBit) {
+                BestSlotInfo info{ armor->GetArmorRating(), armor->value, armor->GetFormID() };
                 if (IsBetter(armor, currentSlotStats[slotBit])) {
-                    isBetterForAnySlot = true;
-                    break;
+                    currentSlotStats[slotBit] = info;
+                    bestSlotItems[slotBit] = { item, entry };
                 }
             }
         }
+    }
 
-        if (isBetterForAnySlot && !entry->IsWorn()) {
-            auto extraData = (entry->extraLists && !entry->extraLists->empty()) ? entry->extraLists->front() : nullptr;
-            equipManager->EquipObject(a_actor, item, extraData, 1, nullptr, false, true, false, true);
-            modelUpdated = true;
+    // 2. ESCOLHE OS MELHORES ITENS POR SLOT ENTRE OS ITENS JA FILTRADOS COMO EQUIPAVEIS
+    for (auto& [item, invData] : inventory) {
+        auto entry = invData.second.get();
+        auto armor = item ? item->As<RE::TESObjectARMO>() : nullptr;
+        if (invData.first <= 0 || !entry || !armor) {
+            continue;
+        }
 
-            for (uint32_t i = 0; i < 32; ++i) {
-                uint32_t slotBit = 1 << i;
-                if (mask & slotBit) {
-                    currentSlotStats[slotBit] = { armor->GetArmorRating(), armor->value, armor->GetFormID() };
-                }
+        uint32_t mask = static_cast<uint32_t>(*armor->GetSlotMask());
+
+        for (uint32_t i = 0; i < 32; ++i) {
+            uint32_t slotBit = 1 << i;
+            if ((mask & slotBit) && IsBetter(armor, currentSlotStats[slotBit])) {
+                currentSlotStats[slotBit] = { armor->GetArmorRating(), armor->value, armor->GetFormID() };
+                bestSlotItems[slotBit] = { item, entry };
             }
         }
+    }
+
+    // 3. EQUIPA CADA ITEM VENCEDOR UMA UNICA VEZ
+    std::set<RE::FormID> equippedForms;
+    for (auto& [slot, bestItem] : bestSlotItems) {
+        auto [item, entry] = bestItem;
+        if (!item || !entry || entry->IsWorn()) {
+            continue;
+        }
+
+        if (!equippedForms.insert(item->GetFormID()).second) {
+            continue;
+        }
+
+        auto extraData = (entry->extraLists && !entry->extraLists->empty()) ? entry->extraLists->front() : nullptr;
+        equipManager->EquipObject(a_actor, item, extraData, 1, nullptr, false, true, false, true);
+        modelUpdated = true;
     }
 
     if (modelUpdated) {

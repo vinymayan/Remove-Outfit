@@ -1,4 +1,4 @@
-﻿#include "Manager.h"
+#include "Manager.h"
 
 
 void Manager::PopulateAllLists() {
@@ -51,19 +51,19 @@ void Manager::PopulateList(const std::string& a_typeName) {
         info.formID = form->GetFormID();
         info.formType = a_typeName;
 
-        // Atribuição segura de string
-        // editorID pode não existir em build pública, mas clib_util tenta pegar
+        // Atribuicao segura de string
+        // editorID pode nao existir em build publica, mas clib_util tenta pegar
         info.editorID = clib_util::editorID::get_editorID(form);
 
         info.name = "";
 
-        // 1. Verifica se o form é um NPC
+        // 1. Verifica se o form e um NPC
         if (form->Is(RE::FormType::NPC)) {
             if (auto npc = form->As<RE::TESNPC>()) {
                 info.name = npc->fullName.c_str();
             }
         }
-        // 2. Opcional: Se não for NPC, tenta pegar o nome de qualquer objeto que tenha TESFullName (Spells, Itens, etc)
+        // 2. Opcional: Se nao for NPC, tenta pegar o nome de qualquer objeto que tenha TESFullName (Spells, Itens, etc)
         else if (auto fullName = form->As<RE::TESFullName>()) {
             info.name = fullName->fullName.c_str();
         }
@@ -83,15 +83,12 @@ void Manager::PopulateList(const std::string& a_typeName) {
 void Manager::ConvertAllNPCOutfitsToInventory() {
     auto settings = NPCSettings::GetSingleton();
     if (settings->outfitMode == OutfitConversionMode::kDisabled) {
-        logger::info("[Outfit] Conversão desativada nas configurações.");
+        logger::info("[Outfit] Conversao desativada nas configuracoes.");
         return;
     }
 
     auto dataHandler = RE::TESDataHandler::GetSingleton();
     if (!dataHandler) return;
-
-    auto potentialFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0005C84D);
-    auto currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0001CA7D);
 
     const auto& npcArray = dataHandler->GetFormArray<RE::TESNPC>();
     uint32_t count = 0;
@@ -99,20 +96,15 @@ void Manager::ConvertAllNPCOutfitsToInventory() {
     for (auto* npc : npcArray) {
         if (!npc) continue;
 
-        if (settings->onlyRecruitable) {
-            bool isPotential = potentialFollowerFaction && npc->IsInFaction(potentialFollowerFaction);
-            bool isCurrent = currentFollowerFaction && npc->IsInFaction(currentFollowerFaction);
-
-            if (!isPotential && !isCurrent) {
-                continue; // Pula este NPC e vai para o próximo
-            }
+        if (!settings->ShouldAffectNPC(npc)) {
+            continue; // Pula este NPC e vai para o proximo
         }
 
         RE::TESForm* itemOwner = settings->markAsOwned ? npc : nullptr;
         bool modified = false;
-        // 1. Processamento do Default Outfit: Verifica explicitamente se NÃO é nullptr
+        // 1. Processamento do Default Outfit: Verifica explicitamente se NAO e nullptr
         if (npc->defaultOutfit != nullptr) {
-            // Se for Full Conversion, move os itens para o inventário antes de limpar
+            // Se for Full Conversion, move os itens para o inventario antes de limpar
             if (settings->outfitMode == OutfitConversionMode::kFullConversion) {
                 for (auto* item : npc->defaultOutfit->outfitItems) {
                     if (item) {
@@ -124,13 +116,13 @@ void Manager::ConvertAllNPCOutfitsToInventory() {
                 }
             }
 
-            // Em ambos os modos (Safe ou Full), o ponteiro é limpo se existia algo ali
+            // Em ambos os modos (Safe ou Full), o ponteiro e limpo se existia algo ali
             npc->defaultOutfit = nullptr;
             modified = true;
 			logger::debug("[Outfit] Default Outfit removido de '{}'.", npc->GetName());
         }
 
-        // 2. Processamento do Sleep Outfit: Verifica se a opção está ativa e se o outfit existe
+        // 2. Processamento do Sleep Outfit: Verifica se a opcao esta ativa e se o outfit existe
         if (settings->removeSleepOutfit && npc->sleepOutfit != nullptr) {
             if (settings->outfitMode == OutfitConversionMode::kFullConversion) {
                 for (auto* item : npc->sleepOutfit->outfitItems) {
@@ -150,5 +142,5 @@ void Manager::ConvertAllNPCOutfitsToInventory() {
 
         if (modified) count++;
     }
-    logger::info("Processados {} NPCs: Outfits convertidos em itens de inventário.", count);
+    logger::info("Processados {} NPCs: Outfits convertidos em itens de inventario.", count);
 }
